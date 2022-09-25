@@ -20,6 +20,7 @@ from scipy.signal import butter, filtfilt
 
 from utils.general import xywh2xyxy, xyxy2xywh
 from utils.metrics import fitness
+from utils.rboxs_utils import poly2hbb, poly2rbox, rbox2poly
 
 # Settings
 matplotlib.rc('font', **{'size': 11})
@@ -68,6 +69,27 @@ def plot_one_box(x, img, color=None, label=None, line_thickness=3):
         cv2.putText(img, label, (c1[0], c1[1] - 2), 0, tl / 3, [225, 255, 255], thickness=tf, lineType=cv2.LINE_AA)
 
 
+def plot_one_box_obb(x, img, color=None, label=None, line_thickness=3):
+    # Plots one bounding box on image img
+    tl = line_thickness or round(0.002 * (img.shape[0] + img.shape[1]) / 2) + 1  # line/font thickness
+    color = color or [random.randint(0, 255) for _ in range(3)]
+    
+    polygon_list = np.array([(x[0], x[1]), (x[2], x[3]), \
+                    (x[4], x[5]), (x[6], x[7])], np.int32)
+    cv2.drawContours(image=img, contours=[polygon_list], contourIdx=-1, color=color, thickness=tl)
+    if label:
+        tf = max(tl - 1, 1)  # font thickness
+        xmax, xmin, ymax, ymin = max(x[0::2]), min(x[0::2]), max(x[1::2]), min(x[1::2])
+        x_label, y_label = int((xmax + xmin)/2), int((ymax + ymin)/2)
+        t_size = cv2.getTextSize(label, 0, fontScale=tl / 3, thickness=tf)[0]
+        cv2.rectangle(
+                        img,
+                        (x_label, y_label),
+                        (x_label + t_size[0] + 1, y_label + int(1.5*t_size[1])),
+                        color, -1, cv2.LINE_AA
+                    )
+        cv2.putText(img, label, (x_label, y_label + t_size[1]), 0, tl / 3, [225, 255, 255], thickness=tf, lineType=cv2.LINE_AA)
+
 def plot_one_box_PIL(box, img, color=None, label=None, line_thickness=None):
     img = Image.fromarray(img)
     draw = ImageDraw.Draw(img)
@@ -106,8 +128,9 @@ def output_to_target(output):
     # Convert model output to target format [batch_id, class_id, x, y, w, h, conf]
     targets = []
     for i, o in enumerate(output):
-        for *box, conf, cls in o.cpu().numpy():
-            targets.append([i, cls, *list(*xyxy2xywh(np.array(box)[None])), conf])
+        for *rbox, conf, cls in o.cpu().numpy():
+            # targets.append([i, cls, *list(*xyxy2xywh(np.array(rbox)[None])), conf])
+            targets.append([i, cls, *list(*(np.array(rbox)[None])), conf]) # it won't return xyxy2xywh
     return np.array(targets)
 
 
@@ -151,27 +174,47 @@ def plot_images(images, targets, paths=None, fname='images.jpg', names=None, max
         mosaic[block_y:block_y + h, block_x:block_x + w, :] = img
         if len(targets) > 0:
             image_targets = targets[targets[:, 0] == i]
-            boxes = xywh2xyxy(image_targets[:, 2:6]).T
+            # boxes = xywh2xyxy(image_targets[:, 2:6]).T
+            rboxes = image_targets[:, 2:7]
             classes = image_targets[:, 1].astype('int')
-            labels = image_targets.shape[1] == 6  # labels if no conf column
-            conf = None if labels else image_targets[:, 6]  # check for confidence presence (label vs pred)
+            # labels = image_targets.shape[1] == 6  # labels if no conf column
+            labels = image_targets.shape[1] == 187  # labels if no conf column
+            # conf = None if labels else image_targets[:, 6]  # check for confidence presence (label vs pred)
+            conf = None if labels else image_targets[:, 7]  # check for confidence presence (label vs pred)
 
-            if boxes.shape[1]:
-                if boxes.max() <= 1.01:  # if normalized with tolerance 0.01
-                    boxes[[0, 2]] *= w  # scale to pixels
-                    boxes[[1, 3]] *= h
-                elif scale_factor < 1:  # absolute coords need scale if image scales
-                    boxes *= scale_factor
-            boxes[[0, 2]] += block_x
-            boxes[[1, 3]] += block_y
-            for j, box in enumerate(boxes.T):
-                cls = int(classes[j])
-                color = colors[cls % len(colors)]
+            # if boxes.shape[1]:
+            #     if boxes.max() <= 1.01:  # if normalized with tolerance 0.01
+            #         boxes[[0, 2]] *= w  # scale to pixels
+            #         boxes[[1, 3]] *= h
+            #     elif scale_factor < 1:  # absolute coords need scale if image scales
+            #         boxes *= scale_factor
+            # boxes[[0, 2]] += block_x
+            # boxes[[1, 3]] += block_y
+            # for j, box in enumerate(boxes.T):
+            #     cls = int(classes[j])
+            #     color = colors[cls % len(colors)]
+            polys = rbox2poly(rboxes)
+            if scale_factor < 1:
+                polys *= scale_factor
+            # boxes[[0, 2]] += x
+            # boxes[[1, 3]] += y
+            polys[:, [0, 2, 4, 6]] += block_x
+            polys[:, [1, 3, 5, 7]] += block_y
+            # for j, box in enumerate(boxes.T.tolist()):
+            #     cls = classes[j]
+            #     color = colors(cls)
+            #     cls = names[cls] if names else cls
+            #     if labels or conf[j] > 0.25:  # 0.25 conf thresh
+            #         label = f'{cls}' if labels else f'{cls} {conf[j]:.1f}'
+            #         annotator.box_label(box, label, color=color)
+            for j, poly in enumerate(polys.tolist()):
+                cls = classes[j]
+                color = colors(cls)
                 cls = names[cls] if names else cls
                 if labels or conf[j] > 0.25:  # 0.25 conf thresh
                     label = '%s' % cls if labels else '%s %.1f' % (cls, conf[j])
-                    plot_one_box(box, mosaic, label=label, color=color, line_thickness=tl)
-
+                    plot_one_box_obb(rboxes, mosaic, label=label, color=color, line_thickness=tl)
+        print("Haven't changed, check results")
         # Draw image filename labels
         if paths:
             label = Path(paths[i]).name[:40]  # trim to 40 char
@@ -269,13 +312,16 @@ def plot_study_txt(path='', x=None):  # from utils.plots import *; plot_study_tx
     plt.savefig(str(Path(path).name) + '.png', dpi=300)
 
 
-def plot_labels(labels, names=(), save_dir=Path(''), loggers=None):
+def plot_labels(labels, names=(), save_dir=Path(''), loggers=None, img_size=1024):
+    rboxes = poly2rbox(labels[:, 1:])
+    labels = np.concatenate((labels[:, :1], rboxes[:, :-1]), axis=1) # [cls xyls]
+
     # plot dataset labels
     print('Plotting labels... ')
     c, b = labels[:, 0], labels[:, 1:].transpose()  # classes, boxes
     nc = int(c.max() + 1)  # number of classes
     colors = color_list()
-    x = pd.DataFrame(b.transpose(), columns=['x', 'y', 'width', 'height'])
+    x = pd.DataFrame(b.transpose(), columns=['x', 'y', 'long_edge', 'short_edge'])
 
     # seaborn correlogram
     sns.pairplot(x, corner=True, diag_kind='auto', kind='hist', diag_kws=dict(bins=50), plot_kws=dict(pmax=0.9))
@@ -293,12 +339,15 @@ def plot_labels(labels, names=(), save_dir=Path(''), loggers=None):
     else:
         ax[0].set_xlabel('classes')
     sns.histplot(x, x='x', y='y', ax=ax[2], bins=50, pmax=0.9)
-    sns.histplot(x, x='width', y='height', ax=ax[3], bins=50, pmax=0.9)
+    sns.histplot(x, x='long_edge', y='short_edge', ax=ax[3], bins=50, pmax=0.9)
 
     # rectangles
-    labels[:, 1:3] = 0.5  # center
-    labels[:, 1:] = xywh2xyxy(labels[:, 1:]) * 2000
-    img = Image.fromarray(np.ones((2000, 2000, 3), dtype=np.uint8) * 255)
+    # labels[:, 1:3] = 0.5  # center
+    labels[:, 1:3] = 0.5 * img_size # center
+    # labels[:, 1:] = xywh2xyxy(labels[:, 1:]) * 2000
+    labels[:, 1:] = xywh2xyxy(labels[:, 1:]) 
+    # img = Image.fromarray(np.ones((2000, 2000, 3), dtype=np.uint8) * 255)
+    img = Image.fromarray(np.ones((img_size, img_size, 3), dtype=np.uint8) * 255)
     for cls, *box in labels[:1000]:
         ImageDraw.Draw(img).rectangle(box, width=1, outline=colors[int(cls) % 10])  # plot
     ax[1].imshow(img)

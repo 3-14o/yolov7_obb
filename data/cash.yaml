@@ -1,0 +1,5 @@
+train: ../CASH_DATASET/train/images
+val: ../CASH_DATASET/valid/images
+
+nc: 10
+names: ['Dime', 'Nickel', 'Penny', 'Quarter', 'fifty', 'five', 'hundred', 'one', 'ten', 'twenty']

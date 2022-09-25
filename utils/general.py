@@ -20,6 +20,8 @@ import yaml
 
 from utils.google_utils import gsutil_getsize
 from utils.metrics import fitness
+pi = 3.141592
+from utils.nms_rotated import obb_nms
 from utils.torch_utils import init_torch_seeds
 
 # Settings
@@ -332,6 +334,36 @@ def scale_coords(img1_shape, coords, img0_shape, ratio_pad=None):
     clip_coords(coords, img0_shape)
     return coords
 
+def scale_polys(img1_shape, polys, img0_shape, ratio_pad=None):
+    # ratio_pad: [(h_raw, w_raw), (hw_ratios, wh_paddings)]
+    # Rescale coords (xyxyxyxy) from img1_shape to img0_shape
+    if ratio_pad is None:  # calculate from img0_shape
+        gain = min(img1_shape[0] / img0_shape[0], img1_shape[1] / img0_shape[1])  # gain  = resized / raw
+        pad = (img1_shape[1] - img0_shape[1] * gain) / 2, (img1_shape[0] - img0_shape[0] * gain) / 2  # wh padding
+    else:
+        gain = ratio_pad[0][0] # h_ratios
+        pad = ratio_pad[1] # wh_paddings
+
+    polys[:, [0, 2, 4, 6]] -= pad[0]  # x padding
+    polys[:, [1, 3, 5, 7]] -= pad[1]  # y padding
+    polys[:, :8] /= gain # Rescale poly shape to img0_shape
+    #clip_polys(polys, img0_shape)
+    return polys
+
+def clip_polys(polys, shape):
+    # Clip bounding xyxyxyxy bounding boxes to image shape (height, width)
+    if isinstance(polys, torch.Tensor):  # faster individually
+        polys[:, 0].clamp_(0, shape[1])  # x1
+        polys[:, 1].clamp_(0, shape[0])  # y1
+        polys[:, 2].clamp_(0, shape[1])  # x2
+        polys[:, 3].clamp_(0, shape[0])  # y2
+        polys[:, 4].clamp_(0, shape[1])  # x3
+        polys[:, 5].clamp_(0, shape[0])  # y3
+        polys[:, 6].clamp_(0, shape[1])  # x4
+        polys[:, 7].clamp_(0, shape[0])  # y4
+    else:  # np.array (faster grouped)
+        polys[:, [0, 2, 4, 6]] = polys[:, [0, 2, 4, 6]].clip(0, shape[1])  # x1, x2, x3, x4
+        polys[:, [1, 3, 5, 7]] = polys[:, [1, 3, 5, 7]].clip(0, shape[0])  # y1, y2, y3, y4
 
 def clip_coords(boxes, img_shape):
     # Clip bounding xyxy bounding boxes to image shape (height, width)
