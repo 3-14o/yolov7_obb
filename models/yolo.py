@@ -30,7 +30,7 @@ class Detect(nn.Module):
     def __init__(self, nc=80, anchors=(), ch=()):  # detection layer
         super(Detect, self).__init__()
         self.nc = nc  # number of classes
-        self.no = nc + 5  # number of outputs per anchor
+        self.no = nc + 5 + 180  # number of outputs per anchor
         self.nl = len(anchors)  # number of detection layers
         self.na = len(anchors[0]) // 2  # number of anchors
         self.grid = [torch.zeros(1)] * self.nl  # init grid
@@ -40,6 +40,17 @@ class Detect(nn.Module):
         self.m = nn.ModuleList(nn.Conv2d(x, self.no * self.na, 1) for x in ch)  # output conv
 
     def forward(self, x):
+        """
+        Args:
+            x (list[P3_in,...]): torch.Size(b, c_i, h_i, w_i)
+
+        Return：
+            if train:
+                x (list[P3_out,...]): torch.Size(b, self.na, h_i, w_i, self.no), self.na means the number of anchors scales
+            else:
+                inference (tensor): (b, n_all_anchors, self.no)
+                x (list[P3_in,...]): torch.Size(b, c_i, h_i, w_i)
+        """
         # x = x.copy()  # for profiling
         z = []  # inference output
         self.training |= self.export
@@ -51,12 +62,12 @@ class Detect(nn.Module):
             if not self.training:  # inference
                 if self.grid[i].shape[2:4] != x[i].shape[2:4]:
                     self.grid[i] = self._make_grid(nx, ny).to(x[i].device)
-                y = x[i].sigmoid()
+                y = x[i].sigmoid() # (tensor): (b, self.na, h, w, self.no)
                 if not torch.onnx.is_in_onnx_export():
                     y[..., 0:2] = (y[..., 0:2] * 2. - 0.5 + self.grid[i]) * self.stride[i]  # xy
                     y[..., 2:4] = (y[..., 2:4] * 2) ** 2 * self.anchor_grid[i]  # wh
-                else:
-                    xy, wh, conf = y.split((2, 2, self.nc + 1), 4)  # y.tensor_split((2, 4, 5), 4)  # torch 1.8.0
+                else: # for YOLOv5 on AWS Inferentia https://github.com/ultralytics/yolov5/pull/2953
+                    xy, wh, conf = y.split((2, 2, self.nc + 1), 4)  # y.tensor_split((2, 4, 5), 4)  # torch 1.8.0 # TODO: this else was not changed
                     xy = xy * (2. * self.stride[i]) + (self.stride[i] * (self.grid[i] - 0.5))  # new xy
                     wh = wh ** 2 * (4 * self.anchor_grid[i].data)  # new wh
                     y = torch.cat((xy, wh, conf), 4)
@@ -94,7 +105,7 @@ class Detect(nn.Module):
         return (box, score)
 
 
-class IDetect(nn.Module):
+class IDetect(nn.Module): # TODO: not changed
     stride = None  # strides computed during build
     export = False  # onnx export
     end2end = False
@@ -104,7 +115,7 @@ class IDetect(nn.Module):
     def __init__(self, nc=80, anchors=(), ch=()):  # detection layer
         super(IDetect, self).__init__()
         self.nc = nc  # number of classes
-        self.no = nc + 5  # number of outputs per anchor
+        self.no = nc + 5 + 180  # number of outputs per anchor
         self.nl = len(anchors)  # number of detection layers
         self.na = len(anchors[0]) // 2  # number of anchors
         self.grid = [torch.zeros(1)] * self.nl  # init grid
@@ -207,7 +218,7 @@ class IDetect(nn.Module):
         return (box, score)
 
 
-class IKeypoint(nn.Module):
+class IKeypoint(nn.Module): # TODO: not changed, not used
     stride = None  # strides computed during build
     export = False  # onnx export
 
@@ -216,7 +227,7 @@ class IKeypoint(nn.Module):
         self.nc = nc  # number of classes
         self.nkpt = nkpt
         self.dw_conv_kpt = dw_conv_kpt
-        self.no_det=(nc + 5)  # number of outputs per anchor for box and class
+        self.no_det=(nc + 5 + 180)  # number of outputs per anchor for box and class
         self.no_kpt = 3*self.nkpt ## number of outputs per anchor for keypoints
         self.no = self.no_det+self.no_kpt
         self.nl = len(anchors)  # number of detection layers
@@ -308,7 +319,7 @@ class IKeypoint(nn.Module):
         return torch.stack((xv, yv), 2).view((1, 1, ny, nx, 2)).float()
 
 
-class IAuxDetect(nn.Module):
+class IAuxDetect(nn.Module): # TODO: not changed, used only in some yamls models
     stride = None  # strides computed during build
     export = False  # onnx export
     end2end = False
@@ -318,7 +329,7 @@ class IAuxDetect(nn.Module):
     def __init__(self, nc=80, anchors=(), ch=()):  # detection layer
         super(IAuxDetect, self).__init__()
         self.nc = nc  # number of classes
-        self.no = nc + 5  # number of outputs per anchor
+        self.no = nc + 5 + 180  # number of outputs per anchor
         self.nl = len(anchors)  # number of detection layers
         self.na = len(anchors[0]) // 2  # number of anchors
         self.grid = [torch.zeros(1)] * self.nl  # init grid
@@ -430,7 +441,7 @@ class IAuxDetect(nn.Module):
         return (box, score)
 
 
-class IBin(nn.Module):
+class IBin(nn.Module): # TODO: not modified, not used
     stride = None  # strides computed during build
     export = False  # onnx export
 
@@ -737,7 +748,7 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
     logger.info('\n%3s%18s%3s%10s  %-40s%-30s' % ('', 'from', 'n', 'params', 'module', 'arguments'))
     anchors, nc, gd, gw = d['anchors'], d['nc'], d['depth_multiple'], d['width_multiple']
     na = (len(anchors[0]) // 2) if isinstance(anchors, list) else anchors  # number of anchors
-    no = na * (nc + 5)  # number of outputs = anchors * (classes + 5)
+    no = na * (nc + 5 + 180)  # number of outputs = anchors * (classes + 5)
 
     layers, save, c2 = [], [], ch[-1]  # layers, savelist, ch out
     for i, (f, n, m, args) in enumerate(d['backbone'] + d['head']):  # from, number, module, args

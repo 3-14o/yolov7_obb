@@ -209,12 +209,12 @@ def plot_images(images, targets, paths=None, fname='images.jpg', names=None, max
             #         annotator.box_label(box, label, color=color)
             for j, poly in enumerate(polys.tolist()):
                 cls = classes[j]
-                color = colors(cls)
+                color = colors[int(cls) % 10]
                 cls = names[cls] if names else cls
                 if labels or conf[j] > 0.25:  # 0.25 conf thresh
                     label = '%s' % cls if labels else '%s %.1f' % (cls, conf[j])
-                    plot_one_box_obb(rboxes, mosaic, label=label, color=color, line_thickness=tl)
-        print("Haven't changed, check results")
+                    plot_one_box_obb(poly, mosaic, label=label, color=color, line_thickness=tl)
+        # TODO: Haven't changed, check results
         # Draw image filename labels
         if paths:
             label = Path(paths[i]).name[:40]  # trim to 40 char
