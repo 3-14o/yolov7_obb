@@ -456,7 +456,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 self.im_cache_dir.mkdir(parents=True, exist_ok=True)
             gb = 0  # Gigabytes of cached images
             self.img_hw0, self.img_hw = [None] * n, [None] * n
-            results = ThreadPool(8).imap(lambda x: load_image(*x), zip(repeat(self), range(n)))
+            results = ThreadPool(8).imap(lambda x: load_image_label(*x), zip(repeat(self), range(n)))
             pbar = tqdm(enumerate(results), total=n)
             for i, x in pbar:
                 if cache_images == 'disk':
@@ -464,7 +464,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         np.save(self.img_npy[i].as_posix(), x[0])
                     gb += self.img_npy[i].stat().st_size
                 else:
-                    self.imgs[i], self.img_hw0[i], self.img_hw[i] = x
+                    self.imgs[i], self.img_hw0[i], self.img_hw[i], self.labels[i] = x
                     gb += self.imgs[i].nbytes
                 pbar.desc = f'{prefix}Caching images ({gb / 1E9:.1f}GB)'
             pbar.close()
