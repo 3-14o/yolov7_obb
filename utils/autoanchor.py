@@ -134,7 +134,7 @@ def kmean_anchors(path='./data/coco.yaml', n=9, img_size=640, thr=4.0, gen=1000,
     # Filter
     i = (ls_edges0 < 5.0).any(1).sum() # TODO: it was 3.0 on v7
     if i:
-        print(f'{prefix}WARNING: Extremely small objects found. {i} of {len(ls_edges0)} labels are < 3 pixels in size.')
+        print(f'{prefix}WARNING: Extremely small objects found. {i} of {len(ls_edges0)} labels are < 5 pixels in size.')
     ls_edges = ls_edges0[(ls_edges0 >= 5.0).any(1)]  # filter > 5 pixels # TODO: it was 2.0 on v7
     # wh = wh * (np.random.rand(wh.shape[0], 1) * 0.9 + 0.1)  # multiply by random scale 0-1
 

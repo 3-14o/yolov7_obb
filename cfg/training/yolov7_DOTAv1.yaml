@@ -4,10 +4,14 @@ depth_multiple: 1.0  # model depth multiple
 width_multiple: 1.0  # layer channel multiple
 
 # anchors
-anchors:
-  - [12,16, 19,36, 40,28]  # P3/8
-  - [36,75, 76,55, 72,146]  # P4/16
-  - [142,110, 192,243, 459,401]  # P5/32
+anchors: # TODO: could be updated with yolov5 values, but cfg not used any more
+  # - [12,16, 19,36, 40,28]  # P3/8 
+  # - [36,75, 76,55, 72,146]  # P4/16
+  # - [142,110, 192,243, 459,401]  # P5/32
+  - [11,5, 19,8, 22,11]
+  - [36,14, 43,20, 88,23]
+  - [75,55, 175,85, 497,265]
+
 
 # yolov7 backbone
 backbone:

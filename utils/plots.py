@@ -425,10 +425,10 @@ def profile_idetection(start=0, stop=0, labels=(), save_dir=''):
 
 def plot_results_overlay(start=0, stop=0):  # from utils.plots import *; plot_results_overlay()
     # Plot training 'results*.txt', overlaying train and val losses
-    s = ['train', 'train', 'train', 'Precision', 'mAP@0.5', 'val', 'val', 'val', 'Recall', 'mAP@0.5:0.95']  # legends
-    t = ['Box', 'Objectness', 'Classification', 'P-R', 'mAP-F1']  # titles
+    s = ['train', 'train', 'train', 'train' 'Precision', 'mAP@0.5', 'val', 'val', 'val', 'Recall', 'mAP@0.5:0.95']  # legends
+    t = ['Box', 'Objectness', 'Classification', 'Theta' 'P-R', 'mAP-F1']  # titles
     for f in sorted(glob.glob('results*.txt') + glob.glob('../../Downloads/results*.txt')):
-        results = np.loadtxt(f, usecols=[2, 3, 4, 8, 9, 12, 13, 14, 10, 11], ndmin=2).T
+        results = np.loadtxt(f, usecols=[2, 3, 4, 5, 9, 10, 13, 14, 15, 11, 12], ndmin=2).T
         n = results.shape[1]  # number of rows
         x = range(start, min(stop, n) if stop else n)
         fig, ax = plt.subplots(1, 5, figsize=(14, 3.5), tight_layout=True)
@@ -450,8 +450,8 @@ def plot_results(start=0, stop=0, bucket='', id=(), labels=(), save_dir=''):
     # Plot training 'results*.txt'. from utils.plots import *; plot_results(save_dir='runs/train/exp')
     fig, ax = plt.subplots(2, 5, figsize=(12, 6), tight_layout=True)
     ax = ax.ravel()
-    s = ['Box', 'Objectness', 'Classification', 'Precision', 'Recall',
-         'val Box', 'val Objectness', 'val Classification', 'mAP@0.5', 'mAP@0.5:0.95']
+    s = ['Box', 'Objectness', 'Classification', 'Theta', 'Precision', 'Recall',
+         'val Box', 'val Objectness', 'val Classification', 'val Theta', 'mAP@0.5', 'mAP@0.5:0.95']
     if bucket:
         # files = ['https://storage.googleapis.com/%s/results%g.txt' % (bucket, x) for x in id]
         files = ['results%g.txt' % x for x in id]
@@ -462,12 +462,12 @@ def plot_results(start=0, stop=0, bucket='', id=(), labels=(), save_dir=''):
     assert len(files), 'No results.txt files found in %s, nothing to plot.' % os.path.abspath(save_dir)
     for fi, f in enumerate(files):
         try:
-            results = np.loadtxt(f, usecols=[2, 3, 4, 8, 9, 12, 13, 14, 10, 11], ndmin=2).T
+            results = np.loadtxt(f, usecols=[2, 3, 4, 5, 9, 10, 13, 14, 15, 11, 12], ndmin=2).T
             n = results.shape[1]  # number of rows
             x = range(start, min(stop, n) if stop else n)
             for i in range(10):
                 y = results[i, x]
-                if i in [0, 1, 2, 5, 6, 7]:
+                if i in [0, 1, 2, 3, 6, 7, 8, 9]:
                     y[y == 0] = np.nan  # don't show zero loss values
                     # y /= y[0]  # normalize
                 label = labels[fi] if len(labels) else f.stem
