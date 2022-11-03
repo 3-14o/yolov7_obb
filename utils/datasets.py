@@ -64,7 +64,10 @@ def exif_size(img):
 
 
 def create_dataloader(path, imgsz, batch_size, stride, opt, names, hyp=None, augment=False, cache=False, pad=0.0, rect=False,
-                      rank=-1, world_size=1, workers=1, image_weights=False, quad=False, prefix=''): # TODO: missing single_cls, names and shuffle
+                      rank=-1, world_size=1, workers=1, image_weights=False, quad=False, prefix='', shuffle=False): # TODO: missing single_cls, names and shuffle
+    if rect and shuffle:
+        print('WARNING: --rect is incompatible with DataLoader shuffle, setting shuffle=False')
+        shuffle = False
     # Make sure only the first process in DDP process the dataset first, and the following others can use the cache
     with torch_distributed_zero_first(rank):
         dataset = LoadImagesAndLabels(path, names, imgsz, batch_size,
@@ -80,11 +83,12 @@ def create_dataloader(path, imgsz, batch_size, stride, opt, names, hyp=None, aug
 
     batch_size = min(batch_size, len(dataset))
     nw = min([os.cpu_count() // world_size, batch_size if batch_size > 1 else 0, workers])  # number of workers
-    sampler = torch.utils.data.distributed.DistributedSampler(dataset) if rank != -1 else None
+    sampler = torch.utils.data.distributed.DistributedSampler(dataset, shuffle=shuffle) if rank != -1 else None
     loader = torch.utils.data.DataLoader if image_weights else InfiniteDataLoader
     # Use torch.utils.data.DataLoader() if dataset.properties will update during training else InfiniteDataLoader()
     dataloader = loader(dataset,
                         batch_size=batch_size,
+                        shuffle=shuffle and sampler is None,
                         num_workers=nw,
                         sampler=sampler,
                         pin_memory=True,
@@ -496,8 +500,8 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         # l = np.array(l, dtype=np.float32)
                         l_ = []
                         for label in labels:
-                            # if label[-1] == "2": # diffcult
-                            #     continue
+                            if label[-1] == "2": # diffcult
+                                continue
                             # cls_id = cls_name_list.index(label[8])
                             cls_id = self.names.index(label[8])
                             # print(cls_id)
