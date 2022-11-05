@@ -48,8 +48,8 @@ def test(data,
          weights=None,
          batch_size=32,
          imgsz=640,
-         conf_thres=0.001,
-         iou_thres=0.6,  # for NMS
+         conf_thres=0.01, # TODO: changed from obb 0.001
+         iou_thres=0.4,  # for NMS # TODO: changed from obb 0.6
          save_json=False,
          single_cls=False,
          augment=False,

@@ -563,19 +563,19 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         mosaic = self.mosaic and random.random() < hyp['mosaic']
         if mosaic:
             # Load mosaic
-            if random.random() < 0.8:
-                img, labels = load_mosaic(self, index) # TODO: check if has been changed
-            else:
-                img, labels = load_mosaic9(self, index) # TODO: check if has been changed
+            # if random.random() < 0.8:
+            img, labels = load_mosaic(self, index) # TODO: took off the mosaic9 as yolov5-obb did not hava it
+            # else:
+                # img, labels = load_mosaic9(self, index) # TODO: took off the mosaic9 as yolov5-obb did not hava it
             shapes = None
 
             # MixUp https://arxiv.org/pdf/1710.09412.pdf
             if random.random() < hyp['mixup']:
-                if random.random() < 0.8:
-                    img2, labels2 = load_mosaic(self, random.randint(0, len(self.labels) - 1))
-                else:
-                    img2, labels2 = load_mosaic9(self, random.randint(0, len(self.labels) - 1))
-                r = np.random.beta(8.0, 8.0)  # mixup ratio, alpha=beta=8.0
+                # if random.random() < 0.8:
+                img2, labels2 = load_mosaic(self, random.randint(0, len(self.labels) - 1)) # TODO: took off the mosaic9 as yolov5-obb did not hava it
+                # else:
+                    # img2, labels2 = load_mosaic9(self, random.randint(0, len(self.labels) - 1)) # TODO: took off the mosaic9 as yolov5-obb did not hava it
+                r = np.random.beta(32.0, 32.0)  # mixup ratio, alpha=beta=32.0
                 img = (img * r + img2 * (1 - r)).astype(np.uint8)
                 labels = np.concatenate((labels, labels2), 0)
 
@@ -594,65 +594,46 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 labels[:, [1, 3, 5, 7]] = img_label[:, [1, 3, 5, 7]] * ratio[0] + pad[0]
                 labels[:, [2, 4, 6, 8]] = img_label[:, [2, 4, 6, 8]] * ratio[1] + pad[1]
 
-        if self.augment: # TODO: different indetation from v5
-            # Augment imagespace
-            if not mosaic:
+            if self.augment:
                 img, labels = random_perspective(img, labels,
                                                  degrees=hyp['degrees'],
                                                  translate=hyp['translate'],
                                                  scale=hyp['scale'],
                                                  shear=hyp['shear'],
                                                  perspective=hyp['perspective'])
-            
-            
-            #img, labels = self.albumentations(img, labels)
 
-            # Augment colorspace
-            # augment_hsv(img, hgain=hyp['hsv_h'], sgain=hyp['hsv_s'], vgain=hyp['hsv_v']) # TODO: turned it off
+        nl = len(labels)  # number of labels
+        # if nl:
+        #     labels[:, 1:5] = xyxy2xywhn(labels[:, 1:5], w=img.shape[1], h=img.shape[0], clip=True, eps=1E-3)
 
-            # Apply cutouts
-            # if random.random() < 0.9:
-            #     labels = cutout(img, labels)
-            
-            # if random.random() < hyp['paste_in']: # TODO: turned it off
-            #     sample_labels, sample_images, sample_masks = [], [], [] 
-            #     while len(sample_labels) < 30:
-            #         sample_labels_, sample_images_, sample_masks_ = load_samples(self, random.randint(0, len(self.labels) - 1))
-            #         sample_labels += sample_labels_
-            #         sample_images += sample_images_
-            #         sample_masks += sample_masks_
-            #         #print(len(sample_labels))
-            #         if len(sample_labels) == 0:
-            #             break
-            #     labels = pastein(img, labels, sample_labels, sample_images, sample_masks)
-
-        nL = len(labels)  # number of labels
-        # if nL:
-        #     labels[:, 1:5] = xyxy2xywh(labels[:, 1:5])  # convert xyxy to xywh
-        #     labels[:, [2, 4]] /= img.shape[0]  # normalized height 0-1
-        #     labels[:, [1, 3]] /= img.shape[1]  # normalized width 0-1
 
         if self.augment:
-            augment_hsv(img, hgain=hyp['hsv_h'], sgain=hyp['hsv_s'], vgain=hyp['hsv_v']) # TODO: that was not here in v7
+            # Albumentations
+            # img, labels = self.albumentations(img, labels)
+            # nl = len(labels)  # update after albumentations
+
+            # HSV color-space
+            augment_hsv(img, hgain=hyp['hsv_h'], sgain=hyp['hsv_s'], vgain=hyp['hsv_v'])
+
             img_h, img_w = img.shape[0], img.shape[1]
-            # flip up-down
+            # Flip up-down
             if random.random() < hyp['flipud']:
                 img = np.flipud(img)
-                if nL:
+                if nl:
                     # labels[:, 2] = 1 - labels[:, 2]
                     labels[:, 2::2] = img_h - labels[:, 2::2] - 1
 
-            # flip left-right
+            # Flip left-right
             if random.random() < hyp['fliplr']:
                 img = np.fliplr(img)
-                if nL:
+                if nl:
                     # labels[:, 1] = 1 - labels[:, 1]
                     labels[:, 1::2] = img_w - labels[:, 1::2] - 1
 
             # Cutouts
             # labels = cutout(img, labels, p=0.5)
             # nl = len(labels)  # update after cutout
-        if nL:
+        if nl:
         # *[clsid poly] to *[clsid cx cy l s theta gaussian_θ_labels] θ∈[-pi/2, pi/2) non-normalized
             rboxes, csl_labels  = poly2rbox(polys=labels[:, 1:], 
                                             num_cls_thata=hyp['cls_theta'] if hyp else 180, 
@@ -663,24 +644,112 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         & (rboxes[:, 1] >= 0) & (rboxes[:, 0] < img.shape[0]) \
                         & (rboxes[:, 2] > 5) | (rboxes[:, 3] > 5)
             labels_obb = labels_obb[labels_mask]
-            nL = len(labels_obb)  # update after filter
+            nl = len(labels_obb)  # update after filter
         
         if hyp:
             c_num = 7 + hyp['cls_theta'] # [index_of_batch clsid cx cy l s theta gaussian_θ_labels]
         else:
             c_num = 187
 
-        # labels_out = torch.zeros((nL, 6))
-        labels_out = torch.zeros((nL, c_num))
-        if nL:
+        # labels_out = torch.zeros((nl, 6))
+        labels_out = torch.zeros((nl, c_num))
+        if nl:
             # labels_out[:, 1:] = torch.from_numpy(labels)
             labels_out[:, 1:] = torch.from_numpy(labels_obb)
 
         # Convert
-        img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416 # TODO: has not been changed
+        img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
         img = np.ascontiguousarray(img)
 
         return torch.from_numpy(img), labels_out, self.img_files[index], shapes
+
+        # if self.augment: # TODO: different indetation from v5
+        #     # Augment imagespace
+        #     if not mosaic:
+        #         img, labels = random_perspective(img, labels,
+        #                                          degrees=hyp['degrees'],
+        #                                          translate=hyp['translate'],
+        #                                          scale=hyp['scale'],
+        #                                          shear=hyp['shear'],
+        #                                          perspective=hyp['perspective'])
+            
+            
+        #     #img, labels = self.albumentations(img, labels)
+
+        #     # Augment colorspace
+        #     # augment_hsv(img, hgain=hyp['hsv_h'], sgain=hyp['hsv_s'], vgain=hyp['hsv_v']) # TODO: turned it off
+
+        #     # Apply cutouts
+        #     # if random.random() < 0.9:
+        #     #     labels = cutout(img, labels)
+            
+        #     # if random.random() < hyp['paste_in']: # TODO: turned it off
+        #     #     sample_labels, sample_images, sample_masks = [], [], [] 
+        #     #     while len(sample_labels) < 30:
+        #     #         sample_labels_, sample_images_, sample_masks_ = load_samples(self, random.randint(0, len(self.labels) - 1))
+        #     #         sample_labels += sample_labels_
+        #     #         sample_images += sample_images_
+        #     #         sample_masks += sample_masks_
+        #     #         #print(len(sample_labels))
+        #     #         if len(sample_labels) == 0:
+        #     #             break
+        #     #     labels = pastein(img, labels, sample_labels, sample_images, sample_masks)
+
+        # nL = len(labels)  # number of labels
+        # # if nL:
+        # #     labels[:, 1:5] = xyxy2xywh(labels[:, 1:5])  # convert xyxy to xywh
+        # #     labels[:, [2, 4]] /= img.shape[0]  # normalized height 0-1
+        # #     labels[:, [1, 3]] /= img.shape[1]  # normalized width 0-1
+
+        # if self.augment:
+        #     augment_hsv(img, hgain=hyp['hsv_h'], sgain=hyp['hsv_s'], vgain=hyp['hsv_v']) # TODO: that was not here in v7
+        #     img_h, img_w = img.shape[0], img.shape[1]
+        #     # flip up-down
+        #     if random.random() < hyp['flipud']:
+        #         img = np.flipud(img)
+        #         if nL:
+        #             # labels[:, 2] = 1 - labels[:, 2]
+        #             labels[:, 2::2] = img_h - labels[:, 2::2] - 1
+
+        #     # flip left-right
+        #     if random.random() < hyp['fliplr']:
+        #         img = np.fliplr(img)
+        #         if nL:
+        #             # labels[:, 1] = 1 - labels[:, 1]
+        #             labels[:, 1::2] = img_w - labels[:, 1::2] - 1
+
+        #     # Cutouts
+        #     # labels = cutout(img, labels, p=0.5)
+        #     # nl = len(labels)  # update after cutout
+        # if nL:
+        # # *[clsid poly] to *[clsid cx cy l s theta gaussian_θ_labels] θ∈[-pi/2, pi/2) non-normalized
+        #     rboxes, csl_labels  = poly2rbox(polys=labels[:, 1:], 
+        #                                     num_cls_thata=hyp['cls_theta'] if hyp else 180, 
+        #                                     radius=hyp['csl_radius'] if hyp else 6.0, 
+        #                                     use_pi=True, use_gaussian=True)
+        #     labels_obb = np.concatenate((labels[:, :1], rboxes, csl_labels), axis=1)
+        #     labels_mask = (rboxes[:, 0] >= 0) & (rboxes[:, 0] < img.shape[1]) \
+        #                 & (rboxes[:, 1] >= 0) & (rboxes[:, 0] < img.shape[0]) \
+        #                 & (rboxes[:, 2] > 5) | (rboxes[:, 3] > 5)
+        #     labels_obb = labels_obb[labels_mask]
+        #     nL = len(labels_obb)  # update after filter
+        
+        # if hyp:
+        #     c_num = 7 + hyp['cls_theta'] # [index_of_batch clsid cx cy l s theta gaussian_θ_labels]
+        # else:
+        #     c_num = 187
+
+        # # labels_out = torch.zeros((nL, 6))
+        # labels_out = torch.zeros((nL, c_num))
+        # if nL:
+        #     # labels_out[:, 1:] = torch.from_numpy(labels)
+        #     labels_out[:, 1:] = torch.from_numpy(labels_obb)
+
+        # # Convert
+        # img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416 # TODO: has not been changed
+        # img = np.ascontiguousarray(img)
+
+        # return torch.from_numpy(img), labels_out, self.img_files[index], shapes
 
     @staticmethod
     def collate_fn(batch):
@@ -1190,7 +1259,7 @@ def random_perspective(img, targets=(), segments=(), degrees=10, translate=.1, s
     return img, targets
 
 
-def box_candidates(box1, box2, wh_thr=2, ar_thr=20, area_thr=0.1, eps=1e-16):  # box1(4,n), box2(4,n)
+def box_candidates(box1, box2, wh_thr=2, ar_thr=100, area_thr=0.1, eps=1e-16):  # box1(4,n), box2(4,n)
     # Compute candidate boxes: box1 before augment, box2 after augment, wh_thr (pixels), aspect_ratio_thr, area_ratio
     w1, h1 = box1[2] - box1[0], box1[3] - box1[1]
     w2, h2 = box2[2] - box2[0], box2[3] - box2[1]
