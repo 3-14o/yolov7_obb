@@ -70,6 +70,10 @@ def plot_one_box(x, img, color=None, label=None, line_thickness=3):
 
 
 def plot_one_box_obb(x, img, color=None, label=None, line_thickness=3):
+    if isinstance(x, torch.Tensor):
+        x = x.cpu().numpy()
+    if isinstance(x[0], torch.Tensor):
+        x = [x.cpu().numpy() for x in x]
     # Plots one bounding box on image img
     tl = line_thickness or round(0.002 * (img.shape[0] + img.shape[1]) / 2) + 1  # line/font thickness
     color = color or [random.randint(0, 255) for _ in range(3)]
@@ -451,7 +455,7 @@ def plot_results(start=0, stop=0, bucket='', id=(), labels=(), save_dir=''):
     fig, ax = plt.subplots(2, 5, figsize=(12, 6), tight_layout=True)
     ax = ax.ravel()
     s = ['Box', 'Objectness', 'Classification', 'Theta', 'Precision', 'Recall',
-         'val Box', 'val Objectness', 'val Classification', 'val Theta', 'mAP@0.5', 'mAP@0.5:0.95']
+         'val Box', 'val Objectness', 'mAP@0.5', 'mAP@0.5:0.95']
     if bucket:
         # files = ['https://storage.googleapis.com/%s/results%g.txt' % (bucket, x) for x in id]
         files = ['results%g.txt' % x for x in id]
@@ -462,9 +466,9 @@ def plot_results(start=0, stop=0, bucket='', id=(), labels=(), save_dir=''):
     assert len(files), 'No results.txt files found in %s, nothing to plot.' % os.path.abspath(save_dir)
     for fi, f in enumerate(files):
         try:
-            results = np.loadtxt(f, usecols=[2, 3, 4, 5, 9, 10, 13, 14, 15, 11, 12], ndmin=2).T
+            results = np.loadtxt(f, usecols=[2, 3, 4, 5, 9, 10, 13, 14, 11, 12], ndmin=2).T
             n = results.shape[1]  # number of rows
-            x = range(start, min(stop, n) if stop else n)
+            x = range(start, min(stop, n) if stop else n) #p recall val_box val_obj map50 map5090
             for i in range(10):
                 y = results[i, x]
                 if i in [0, 1, 2, 3, 6, 7, 8, 9]:
