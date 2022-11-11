@@ -10,7 +10,7 @@
 
 <div align="center">
     <a href="./">
-        <img src="./figure/train_batch0.png" width="79%"/>
+        <img src="./figure/train_batch0.jpg" width="79%"/>
     </a>
 </div>
 
