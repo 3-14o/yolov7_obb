@@ -44,6 +44,10 @@ Please refer to [install.md](./docs/install.md) for installation and dataset pre
 
 This repo is based on [YOLOv7](https://arxiv.org/abs/2207.02696). Please refer to [getStarted.md](./docs/getStarted.md) for the basic usage.
 
+## Re-parameterization
+
+See [reparameterization.ipynb](tools/reparameterization.ipynb)
+
 ## Acknowledgements
 
 <details><summary> <b>Expand</b> </summary>

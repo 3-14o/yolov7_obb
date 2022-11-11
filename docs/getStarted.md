@@ -188,3 +188,9 @@ python detect.py --weights 'runs/train/yolov7_dotav1.5/weights/best.pt' \
 ```
 
 ***If you want to evaluate the result on DOTA test-dev, please zip the poly format results files and submit it to the  [evaluation server](https://captain-whu.github.io/DOTA/index.html).**
+
+
+# Unfinished work
+
+1. Multiple GPU training
+2. train p6 models (only p5 working)
